@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>إدارة الموقع</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#e9e6df;--panel:#f7f5f0;--ink:#1d2b33;--mute:#6a767c;--line:#cfcac0;--accent:#1f5f7a;--in:#2f7d4f;--out:#c2492b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a2024;--panel:#232b30;--ink:#e8eaeb;--mute:#93a0a6;--line:#3a454b;--accent:#5fb0cf;--in:#58b97f;--out:#e8795c}}
+:root[data-theme="dark"]{--bg:#1a2024;--panel:#232b30;--ink:#e8eaeb;--mute:#93a0a6;--line:#3a454b;--accent:#5fb0cf;--in:#58b97f;--out:#e8795c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Cairo,Tahoma,sans-serif;line-height:1.6;padding:16px}
+.wrap{max-width:860px;margin:auto}
+h1{font-size:22px;font-weight:800;margin:4px 0 12px}
+h2{font-size:16px;font-weight:600;margin:0 0 10px}
+.tabs,.bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bar button{flex:1;width:auto}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;margin-top:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.card small{display:block;color:var(--mute);font-size:12px}
+.card b{font-size:18px}
+.card.main{background:var(--accent);border-color:var(--accent);color:#fff}
+.card.main small{color:#fff;opacity:.85}.card.main b{font-size:24px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:8px}
+.pr{display:grid;grid-template-columns:100px 90px 1fr auto;gap:6px;margin-bottom:6px}
+input,select,button,textarea{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);width:100%}
+textarea{margin-bottom:8px;resize:vertical}
+button{background:var(--accent);color:#fff;border:0;font-weight:600;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.ghost{background:transparent;color:var(--out);border:1px solid var(--line);width:auto;padding:0 8px;font-size:13px}
+.wr{display:grid;grid-template-columns:24px 1fr 80px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.wr input[type=checkbox]{width:20px;height:20px;padding:0}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+th,td{padding:8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mute);font-weight:600}
+label{font-size:13px;color:var(--mute)}
+tfoot td{font-weight:800;border-top:2px solid var(--line)}
+.in{color:var(--in);font-weight:600}.out{color:var(--out);font-weight:600}
+.empty{color:var(--mute);text-align:center;padding:14px 0;font-size:14px}
+.note{color:var(--mute);font-size:13px;margin:6px 0 0}
+#msg{position:fixed;inset-inline:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:6px;text-align:center;display:none;max-width:500px;margin:auto}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- مكتبة Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="wrap">
+<h1>إدارة الموقع</h1>
+<div id="authContainer"></div>
+<div id="mainApp" style="display:none;">
+<div class="tabs"><button id="tDay">إدخال اليوم</button><button id="tRep">التقارير</button></div>
+<div id="app"><div class="empty">جارٍ التحميل...</div></div>
+</div>
+</div>
+<div id="msg" role="status"></div>
+<script>
+/* إعدادات الاتصال بـ Supabase (قم بتعبئة بيانات مشروعك هنا) */
+const SUPABASE_URL = 'https://evwxuwmtngdvarourkul.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_fwyGMpuHiQxOKLJJTsp0cw_FAftI6N8';
+let supabaseClient = null;
+if (window.supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL' /* مضبوط */) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+const KEY='site_db2',D={workers:[],att:[],cash:[]};
+let DB=null,DL=null,RO=false,P=[],currentUser=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const S={tab:'day',day:today(),rep:'day',from:'',to:'',m:'',wk:'',pend:0,pm:'exp'};
+const WD=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const wd=d=>WD[new Date(d+'T00:00:00').getDay()]||'',dt=d=>wd(d)+' '+d;
+const LBL={in:'وارد',gen:'مصروف',inv:'فاتورة',pay:'دفعة عامل/معدة'};
+const f=n=>(+n).toFixed(2);
+const sum=(a,fn)=>a.reduce((s,x)=>s+fn(x),0);
+const inn=c=>c.t==='in'?c.a:0,outt=c=>c.t==='in'?0:c.a;
+const bal=up=>{const l=up?D.cash.filter(c=>c.d<=up):D.cash;return sum(l,inn)-sum(l,outt)};
+const UN=w=>w.unit==='hr'?'ساعة':'يوم',dflt=w=>w.unit==='hr'?8:1,uq=(w,n)=>n+' '+UN(w),wo=id=>D.workers.find(w=>w.id===id)||{unit:'day',kind:'w'};
+const wn=id=>esc((D.workers.find(w=>w.id===id)||{name:'—'}).name);
+const wstat=(w,fl=()=>true)=>{const a=D.att.filter(x=>x.w===w.id&&fl(x.d)),p=D.cash.filter(c=>c.t==='pay'&&c.w===w.id&&fl(c.d));const days=sum(a,x=>x.n),due=sum(a,x=>x.n*x.r),paid=sum(p,c=>c.a);return{days,due,paid,rem:due-paid}};
+const sorted=()=>[...D.cash].sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.id-b.id);
+const cdesc=c=>LBL[c.t]+(c.t==='pay'?': '+wn(c.w):'')+(c.desc?' - '+esc(c.desc):'');
+let tm;const say=m=>{const e=$('msg');e.textContent=m;e.style.display='block';clearTimeout(tm);tm=setTimeout(()=>e.style.display='none',3200)};
+const tr=(...c)=>`<tr>${c.map(x=>`<td>${x}</td>`).join('')}</tr>`;
+const tbl=(h,rows,foot)=>`<div class="scroll"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.join(''):`<tr><td colspan="${h.length}" class="empty">لا توجد بيانات</td></tr>`}</tbody>${foot?`<tfoot>${foot}</tfoot>`:''}</table></div>`;
+const card=(l,v,c='')=>`<div class="card ${c}"><small>${l}</small><b>${v}</b></div>`;
+
+async function loadDataFromCloudOrLocal() {
+    if (supabaseClient && currentUser) {
+        try {
+            for (const col of ['workers', 'att', 'cash']) {
+                const { data, error } = await supabaseClient.from(col).select('*');
+                if (!error && data) {
+                    D[col] = data.map(x => ({...x, _k: x._k || x.id}));
+                }
+            }
+        } catch(e) { console.log('خطأ في جلب بيانات السحابة', e); }
+    } else {
+        try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s)for(const k in D)D[k]=s[k]||[]}catch(e){}
+    }
+    render();
+}
+
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}};
+
+async function put(col,key,o){
+    key=String(key);
+    try{
+        if(DB) {
+            await DB.collection(col).doc(key).set(o);
+        } else if(supabaseClient && currentUser) {
+            const payload = { ...o, _k: key, user_id: currentUser.id };
+            await supabaseClient.from(col).upsert(payload, { onConflict: '_k' });
+            const a=D[col],i=a.findIndex(x=>x._k===key),v={...o,_k:key};
+            i<0?a.push(v):a[i]=v;
+            render();
+        } else {
+            const a=D[col],i=a.findIndex(x=>x._k===key),v={...o,_k:key};
+            i<0?a.push(v):a[i]=v;
+            persist();
+            render();
+        }
+    }catch(e){say('تعذّر الحفظ')}
+}
+
+async function del(col,key){
+    key=String(key);
+    try{
+        if(DB) {
+            await DB.collection(col).doc(key).delete();
+        } else if(supabaseClient && currentUser) {
+            await supabaseClient.from(col).delete().eq('_k', key);
+            D[col]=D[col].filter(x=>x._k!==key);
+            render();
+        } else {
+            D[col]=D[col].filter(x=>x._k!==key);
+            persist();
+            render();
+        }
+    }catch(e){say('تعذّر الحذف')}
+}
+
+function renderAuth() {
+    const authEl = $('authContainer');
+    const mainEl = $('mainApp');
+    if (!supabaseClient) {
+        authEl.style.display = 'none';
+        mainEl.style.display = 'block';
+        loadDataFromCloudOrLocal();
+        return;
+    }
+    if (currentUser) {
+        authEl.style.display = 'none';
+        mainEl.style.display = 'block';
+        loadDataFromCloudOrLocal();
+    } else {
+        mainEl.style.display = 'none';
+        authEl.innerHTML = `
+            <section style="max-width:400px; margin: 40px auto; text-align:center;">
+                <h2>تسجيل الدخول للنظام السحابي</h2>
+                <p class="note">أدخل بريدك الإلكتروني وكلمة المرور لمزامنة البيانات وحفظها.</p>
+                <input type="email" id="authEmail" placeholder="البريد الإلكتروني" style="margin-bottom:10px;">
+                <input type="password" id="authPass" placeholder="كلمة المرور" style="margin-bottom:14px;">
+                <div class="bar" style="margin-bottom:10px;">
+                    <button onclick="handleLogin()">دخول</button>
+                    <button onclick="handleSignUp()" class="ghost" style="border:1px solid var(--line); color:var(--ink);">حساب جديد</button>
+                </div>
+            </section>
+        `;
+    }
+}
+
+async function handleLogin() {
+    const email = $('authEmail').value.trim();
+    const password = $('authPass').value.trim();
+    if(!email || !password) return say('أدخل البريد وكلمة المرور');
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if(error) return say('خطأ في تسجيل الدخول: ' + error.message);
+    currentUser = data.user;
+    say('تم تسجيل الدخول بنجاح');
+    renderAuth();
+}
+
+async function handleSignUp() {
+    const email = $('authEmail').value.trim();
+    const password = $('authPass').value.trim();
+    if(!email || !password) return say('أدخل البريد وكلمة المرور');
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    if(error) return say('خطأ في إنشاء الحساب: ' + error.message);
+    if(data.session){ currentUser = data.user; say('تم إنشاء الحساب'); renderAuth(); }
+    else { say('تم إنشاء الحساب، فعّل البريد من الرسالة ثم سجّل الدخول'); }
+}
+
+function setAtt(id,on){const k=S.day+'_'+id;if(on){const w=D.workers.find(w=>w.id===id);put('att',k,{d:S.day,w:id,n:dflt(w),r:w.rate})}else del('att',k)}
+function setDays(id,v){const a=D.att.find(x=>x.d===S.day&&x.w===id);if(a)put('att',a._k,{d:a.d,w:a.w,n:Math.max(0,parseFloat(v)||0),r:a.r})}
+function addWorker(){const name=$('wName').value.trim(),rate=parseFloat($('wRate').value),kind=$('wKind').value,unit=$('wUnit').value;if(!name||!rate||rate<=0)return say('أدخل الاسم والأجر');$('wName').value='';$('wRate').value='';const id=Date.now();put('workers',id,{id,name,rate,kind,unit});say('تمت الإضافة')}
+function addCash(){const t=$('cType').value,a=parseFloat($('cAmt').value),desc=$('cDesc').value.trim(),w=t==='pay'?+$('cWk').value:0;
+ if(!a||a<=0)return say('أدخل مبلغًا صحيحًا');
+ if(t==='pay'&&!w)return say('اختر العامل');
+ if(t!=='in'&&a>bal())return say('رصيد العهدة لا يكفي');
+ $('cAmt').value='';$('cDesc').value='';const id=Date.now();put('cash',id,{id,d:S.day,t,a,desc,w});say('تم تسجيل الحركة')}
+function delCash(id){if(S.pend!==id){S.pend=id;render();setTimeout(()=>{S.pend=0;render()},3000);return}
+ const c=D.cash.find(x=>x.id===id);S.pend=0;if(c)del('cash',c._k)}
+function setS(k,v){S[k]=v;render()}
+
+const AR='٠١٢٣٤٥٦٧٨٩',FA='۰۱۲۳۴۵۶۷۸۹';
+const norm=s=>s.replace(/[٠-٩]/g,c=>AR.indexOf(c)).replace(/[۰-۹]/g,c=>FA.indexOf(c)).replace(/٬/g,'').replace(/(\d),(?=\d{3}\b)/g,'$1').replace(/٫/g,'.');
+const WA=/^\[?\d{1,2}[\/.]\d{1,2}[\/.]\d{2,4},?\s+\d{1,2}:\d{2}(:\d{2})?\s*([APap][Mm]\vert{}ص\vert{}م)?\]?\s*-?\s*[^:]{1,40}:\s*/;
+const CUR=/(\d+(?:\.\d+)?)\s*(?:ريال|ر\.?\s?س|sar)|(?:ريال|ر\.?\s?س|sar)\s*(\d+(?:\.\d+)?)/i;
+function parse(text){const out=[];
+ for(let l of text.split('\n')){
+  l=norm(l).replace(WA,'').replace(/^\s*[*•\-–]?\s*\d{1,3}\s*[).\-–]\s+/,'').replace(/^\s*[*•\-–]\s+/,'').trim();
+  if(!l||/اجمالي|إجمالي|المجموع|مجموع|total/i.test(l))continue;
+  const nums=[...l.matchAll(/\d+(?:\.\d+)?/g)];if(!nums.length)continue;
+  const cm=l.match(CUR);let a,rm;
+  if(cm){a=+(cm[1]||cm[2]);rm=cm[0]}else{rm=nums[nums.length-1][0];a=+rm}
+  if(!(a>0))continue;
+  const i=l.lastIndexOf(rm);
+  const desc=(l.slice(0,i)+' '+l.slice(i+rm.length)).replace(/ريال|ر\.?\s?س|sar/ig,' ').replace(/[:=*•\-–]+/g,' ').replace(/\s+/g,' ').trim();
+  out.push({t:/فاتور|فواتير|invoice/i.test(l)?'inv':'gen',a,desc});
+ }return out}
+const nz=s=>s.replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim().toLowerCase();
+function findW(name){const n=nz(name);if(n.length<2)return 0;const ws=D.workers.map(w=>({w,m:nz(w.name)}));
+ let r=ws.filter(x=>x.m===n);if(r.length===1)return r[0].w.id;
+ r=ws.filter(x=>x.m.includes(n)||n.includes(x.m));if(r.length===1)return r[0].w.id;
+ r=ws.filter(x=>x.m.split(' ')[0]===n.split(' ')[0]);return r.length===1?r[0].w.id:0}
+function parseAtt(text){const out=[];
+ for(let l of text.split('\n')){
+  l=norm(l).replace(WA,'').replace(/^\s*[*•\-–]?\s*\d{1,3}\s*[).\-–]\s+/,'').replace(/^\s*[*•\-–]\s+/,'').trim();if(!l||/\d{1,2}[\/.]\d{1,2}/.test(l))continue;
+  const nm=l.match(/\d+(?:\.\d+)?/g),n=nm?+nm[nm.length-1]:null;
+  const name=l.replace(/\d+(?:\.\d+)?/g,' ').replace(/ايام|أيام|يوم|ساعات|ساعه|ساعة|\bhrs?\b|\bh\b|[:=*•\-–()\/.,]+/gi,' ').replace(/\s+/g,' ').trim();
+  if(!name||!/[\u0600-\u06FFa-z]/i.test(name))continue;
+  const w=findW(name),wk=D.workers.find(x=>x.id===w);
+  if(!w&&n===null)continue;
+  out.push({w,name,n:n>0?n:(wk&&wk.unit==='hr'?8:1)})}
+ return out}
+function eA(i,k,v){P[i][k]=k==='n'?(parseFloat(v)||0):+v;render()}
+const pvA=()=>P.map((p,i)=>`<div class="pr" style="grid-template-columns:130px 80px 1fr auto"><select onchange="eA(${i},'w',this.value)"><option value="0">— تجاهل —</option>${D.workers.map(w=>`<option value="${w.id}" ${w.id===p.w?'selected':''}>${esc(w.name)}</option>`).join('')}</select><input id="pa${i}" type="number" step="0.5" value="${p.n}" oninput="eA(${i},'n',this.value)"><span class="note" style="margin:0;align-self:center">${p.w?'':'غير معروف: '}${esc(p.name)}</span><button class="ghost" onclick="rP(${i})" aria-label="حذف">✕</button></div>`).join('')+`<p class="note">${P.filter(p=>p.w).length} من ${P.length} سيُسجَّل. الرقم يُحسب بوحدة الشخص (يوم أو ساعة)، والصفوف المتجاهلة لا تُضاف.</p><button onclick="addAllA()">تسجيل الحضور</button>`;
+async function addAllA(){const rows=P.filter(p=>p.w&&p.n>0);if(!rows.length)return say('لا توجد بنود مطابقة للتسجيل');P=[];$('paste').value='';
+ for(const p of rows){const w=D.workers.find(x=>x.id===p.w);await put('att',S.day+'_'+w.id,{d:S.day,w:w.id,n:p.n,r:w.rate})}say('تم تسجيل حضور '+rows.length)}
+
+function setPm(v){S.pm=v;P=[];render()}
+function doParse(){P=S.pm==='att'?parseAtt($('paste').value):parse($('paste').value);if(!P.length)say(S.pm==='att'?'لم أجد أسماء في القائمة':'لم أجد بنودًا بها مبالغ');render()}
+function eP(i,k,v){P[i][k]=k==='a'?(parseFloat(v)||0):v;render()}
+function rP(i){P.splice(i,1);render()}
+async function addAll(){const tot=sum(P,p=>p.a);if(tot>bal())return say('رصيد العهدة لا يكفي: ينقص '+f(tot-bal())+' ريال');
+ const n=P.length,items=P;P=[];$('paste').value='';let id=Date.now();
+ for(const p of items){id++;await put('cash',id,{id,d:S.day,t:p.t,a:p.a,desc:p.desc,w:0})}say('تمت إضافة '+n+' بند')}
+const pv=()=>P.map((p,i)=>`<div class="pr"><select onchange="eP(${i},'t',this.value)"><option value="gen" ${p.t==='gen'?'selected':''}>مصروف</option><option value="inv" ${p.t==='inv'?'selected':''}>فاتورة</option></select><input id="pa${i}" type="number" value="${p.a}" oninput="eP(${i},'a',this.value)"><input id="pd${i}" value="${esc(p.desc)}" oninput="eP(${i},'desc',this.value)"><button class="ghost" onclick="rP(${i})" aria-label="حذف">✕</button></div>`).join('')+`<p class="note">${P.length} بند، الإجمالي ${f(sum(P,p=>p.a))} ريال. راجع النوع والمبلغ قبل الإضافة.</p><button onclick="addAll()">إضافة كل البنود</button>`;
+
+const enc=()=>'SITE1:'+btoa(unescape(encodeURIComponent(JSON.stringify({w:D.workers,a:D.att,c:D.cash}))));
+const syncSec=()=>`<section><h2>إرسال واستقبال البيانات</h2>${DB||(supabaseClient&&currentUser)?'<p class="note" style="margin:0 0 8px">البيانات متزامنة سحابياً.</p>':'<p class="note" style="margin:0 0 8px">البيانات محفوظة على هذا الجهاز فقط.</p>'}<div class="bar"><button onclick="mkCode()">تجهيز الكود للإرسال</button><button onclick="saveCode()">حفظ كملف</button></div>${S.code?`<textarea id="outc" rows="3" readonly onclick="this.select()">${esc(S.code)}</textarea>`:''}<textarea id="inc" rows="3" placeholder="الصق الكود المستلم هنا"></textarea><div class="bar"><button onclick="imp($('inc').value)">استيراد ودمج</button><button onclick="$('fin').click()">استيراد من ملف</button></div><input type="file" id="fin" accept=".txt" style="display:none" onchange="impFile(this)"></section>`;
+function mkCode(){S.code=enc();try{navigator.clipboard.writeText(S.code).then(()=>say('تم نسخ الكود. الصقه في واتساب'),()=>say('انسخ الكود من الخانة'))}catch(e){say('انسخ الكود من الخانة')}render()}
+function saveCode(){save('site-data-'+today()+'.txt',enc())}
+async function imp(t){const m=(t||'').match(/SITE1:([A-Za-z0-9+\/=\s]+)/);if(!m)return say('لم أجد كودًا صحيحًا');
+ let o;try{o=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/\s/g,'')))))}catch(e){return say('الكود غير صحيح أو ناقص')}
+ let n=0;for(const[col,arr]of[['workers',o.w],['att',o.a],['cash',o.c]])for(const x of arr||[]){const{_k,...r}=x,old=D[col].find(y=>y._k===_k);
+  if(old){const{_k:k2,...ro}=old;if(JSON.stringify(ro)===JSON.stringify(r))continue}await put(col,_k,r);n++}
+ $('inc')&&($('inc').value='');say(n?'تم دمج '+n+' سجل':'لا توجد سجلات جديدة')}
+async function impFile(el){const f=el.files[0];if(f)imp(await f.text());el.value=''}
+
+function dayView(){
+ const cs=D.cash.filter(c=>c.d===S.day),at=D.att.filter(a=>a.d===S.day);
+ return `<div class="cards">${card('رصيد العهدة الحالي',f(bal())+' ريال','main')}${card('وارد اليوم',f(sum(cs,inn)))}${card('مصروف اليوم',f(sum(cs,outt)))}${card('عمال اليوم',at.length)}</div>
+ <section><h2>تاريخ اليوم</h2>${dBox()}</section>
+ <section><h2>حضور اليوم (عمال ومعدات)</h2>${D.workers.length?D.workers.map(w=>{const a=at.find(x=>x.w===w.id);return `<label class="wr"><input type="checkbox" ${a?'checked':''} onchange="setAtt(${w.id},this.checked)"><span>${esc(w.name)} <small style="color:var(--mute)">${w.kind==='e'?'معدة · ':''}${w.rate} ريال/${UN(w)}</small></span><input type="number" step="0.5" min="0" value="${a?a.n:dflt(w)}" ${a?'':'disabled'} onchange="setDays(${w.id},this.value)" aria-label="${UN(w)}"></label>`}).join(''):'<div class="empty">أضف العمال أو المعدات أولاً من النموذج أدناه.</div>'}</section>
+ <section><h2>لصق قائمة من واتساب</h2><select id="pmode" onchange="setPm(this.value)" style="margin-bottom:8px"><option value="exp" ${S.pm!=='att'?'selected':''}>قائمة مصروفات وفواتير</option><option value="att" ${S.pm==='att'?'selected':''}>قائمة حضور (عمال ومعدات)</option></select><textarea id="paste" rows="5" placeholder="${S.pm==='att'?'أحمد 1&#10;محمد 0.5&#10;الحفار 8 ساعات':'ديزل 500&#10;فاتورة كهرباء 1200'}"></textarea><button onclick="doParse()">تحليل القائمة</button>${P.length?`<div style="margin-top:10px">${S.pm==='att'?pvA():pv()}</div>`:''}</section>
+ <section><h2>وارد ومصروفات</h2><div class="row"><select id="cType"><option value="in">عهدة واردة</option><option value="gen">مصروف</option><option value="inv">فاتورة</option><option value="pay">دفعة لعامل أو معدة</option></select><select id="cWk" style="display:none"><option value="">-- اختر العامل --</option>${D.workers.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><input type="number" id="cAmt" placeholder="المبلغ (ريال)" inputmode="decimal" min="0"></div><input id="cDesc" placeholder="البيان (اختياري)" style="margin-bottom:8px"><button onclick="addCash()">تسجيل الحركة</button>
+ ${tbl(['النوع','المبلغ','البيان',''],cs.map(c=>tr(`<span class="${c.t==='in'?'in':'out'}">${LBL[c.t]}</span>`,f(c.a),c.t==='pay'?wn(c.w):esc(c.desc||'—'),`<button class="ghost" onclick="delCash(${c.id})">${S.pend===c.id?'تأكيد؟':'حذف'}</button>`)))}</section>
+ ${syncSec()}
+ <section><h2>إضافة عامل أو معدة</h2><div class="row"><select id="wKind"><option value="w">عامل</option><option value="e">معدة</option></select><select id="wUnit"><option value="day">أجر باليوم</option><option value="hr">أجر بالساعة</option></select></div><div class="row"><input id="wName" placeholder="الاسم"><input type="number" id="wRate" placeholder="الأجر لليوم أو للساعة (ريال)" inputmode="decimal" min="0"></div><button onclick="addWorker()">إضافة</button></section>`}
+
+const REPS={day:'تقرير اليوم',all:'كامل الحركات',month:'التقرير الشهري',worker:'حساب عامل أو معدة',custody:'حركة العهدة',totals:'إجمالي الواصل والمصروف',dues:'مستحقات العمال والمعدات'};
+const sm=(l,t)=>sum(l.filter(c=>c.t===t),c=>c.a);
+const rng=d=>(!S.from||d>=S.from)&&(!S.to||d<=S.to);
+const cashR=()=>D.cash.filter(c=>rng(c.d)),attR=()=>D.att.filter(a=>rng(a.d));
+const openBal=()=>{if(!S.from)return 0;const p=D.cash.filter(c=>c.d<S.from);return sum(p,inn)-sum(p,outt)};
+const dBox=()=>`<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><input type="date" value="${S.day}" onchange="setS('day',this.value||today())"><b style="white-space:nowrap">${wd(S.day)}</b></div>`;
+const R={
+ day(){const cs=D.cash.filter(c=>c.d===S.day),at=D.att.filter(a=>a.d===S.day);
+  return dBox()+`<div class="cards">${card('وارد',f(sum(cs,inn)))}${card('مصروف (يشمل الفواتير والدفعات)',f(sum(cs,outt)))}${card('أجور مستحقة اليوم',f(sum(at,a=>a.n*a.r)))}${card('الرصيد في نهاية اليوم',f(bal(S.day)),'main')}</div>
+  <h2 style="margin-top:14px">الحضور</h2>${tbl(['الاسم','الكمية','الأجر','المستحق'],at.map(a=>tr(wn(a.w),uq(wo(a.w),a.n),a.r,f(a.n*a.r))),tr('الإجمالي','','',f(sum(at,a=>a.n*a.r))))}
+  <h2 style="margin-top:14px">الحركات المالية</h2>${tbl(['النوع','المبلغ','البيان'],cs.map(c=>tr(LBL[c.t],f(c.a),c.t==='pay'?wn(c.w):esc(c.desc||'—'))),tr('إجمالي الوارد',f(sum(cs,inn)),'')+tr('إجمالي المصروف',f(sum(cs,outt)),''))}`},
+ all(){const cs=cashR(),at=attR(),ev=[...at.map(a=>({d:a.d,k:'حضور',x:wn(a.w)+' - '+uq(wo(a.w),a.n),a:a.n*a.r,o:0})),...cs.map(c=>({d:c.d,k:LBL[c.t],x:cdesc(c),a:c.a,o:c.id,c:c.t==='in'?'in':'out'}))].sort((p,q)=>p.d<q.d?-1:p.d>q.d?1:p.k==='حضور'?-1:p.o-q.o);
+  return tbl(['التاريخ','النوع','البيان','المبلغ'],ev.map(e=>tr(dt(e.d),e.k,e.x,`<span class="${e.c||''}">${f(e.a)}</span>`)),tr('','','إجمالي الأجور المستحقة',f(sum(at,a=>a.n*a.r)))+tr('','','إجمالي الوارد',f(sum(cs,inn)))+tr('','','إجمالي المصروف',f(sum(cs,outt))))},
+ month(){const cs=cashR(),at=attR(),open=openBal(),ds=[...new Set([...cs.map(c=>c.d),...at.map(a=>a.d)])].sort();
+  const rows=ds.map(d=>{const c=cs.filter(x=>x.d===d),a=at.filter(x=>x.d===d);return tr(dt(d),a.length,f(sum(a,x=>x.n*x.r)),f(sum(c,inn)),f(sm(c,'gen')),f(sm(c,'inv')),f(sm(c,'pay')))});
+  const ws=D.workers.map(w=>({w,s:wstat(w,rng)})).filter(x=>x.s.days||x.s.paid),t=k=>sum(ws,x=>x.s[k]);
+  return `<div class="cards">${card('رصيد أول الفترة',f(open))}${card('وارد الفترة',f(sum(cs,inn)))}${card('مصروف الفترة',f(sum(cs,outt)))}${card('رصيد آخر الفترة',f(open+sum(cs,inn)-sum(cs,outt)),'main')}</div>
+  <h2 style="margin-top:14px">حسب اليوم</h2>${tbl(['اليوم','حضور','أجور','وارد','مصروفات','فواتير','دفعات عمال'],rows,tr('الإجمالي',sum(ds,d=>at.filter(x=>x.d===d).length),f(sum(at,a=>a.n*a.r)),f(sum(cs,inn)),f(sm(cs,'gen')),f(sm(cs,'inv')),f(sm(cs,'pay'))))}
+  <h2 style="margin-top:14px">العمال في الفترة</h2>${tbl(['الاسم','الكمية','المستحق','المدفوع','المتبقي'],ws.map(({w,s})=>tr(esc(w.name),uq(w,s.days),f(s.due),f(s.paid),`<span class="${s.rem>0?'out':'in'}">${f(s.rem)}</span>`)),tr('الإجمالي','',f(t('due')),f(t('paid')),f(t('rem'))))}`},
+ worker(){const w=D.workers.find(x=>x.id===+S.wk),sel=`<select onchange="setS('wk',this.value)" style="margin-bottom:8px"><option value="">-- اختر العامل --</option>${D.workers.map(x=>`<option value="${x.id}" ${x.id===+S.wk?'selected':''}>${esc(x.name)}</option>`).join('')}</select>`;
+  if(!w)return sel+'<div class="empty">اختر عاملاً لعرض كشف حسابه.</div>';
+  const s=wstat(w,rng),at=D.att.filter(a=>a.w===w.id&&rng(a.d)).sort((a,b)=>a.d<b.d?-1:1),pm=sorted().filter(c=>c.t==='pay'&&c.w===w.id&&rng(c.d));
+  return sel+`<div class="cards">${card('الكمية',uq(w,s.days))}${card('المستحق',f(s.due))}${card('المدفوع له',f(s.paid))}${card('المتبقي',f(s.rem),'main')}</div>
+  <h2 style="margin-top:14px">الحضور</h2>${tbl(['التاريخ','الكمية','الأجر','المستحق'],at.map(a=>tr(dt(a.d),uq(w,a.n),a.r,f(a.n*a.r))),tr('الإجمالي',uq(w,s.days),'',f(s.due)))}
+  <h2 style="margin-top:14px">الدفعات</h2>${tbl(['التاريخ','المبلغ','البيان'],pm.map(c=>tr(dt(c.d),f(c.a),esc(c.desc||'—'))),tr('الإجمالي',f(s.paid),''))}`},
+ custody(){const cs=sorted().filter(c=>rng(c.d)),o=openBal();let run=o;
+  const rows=cs.map(c=>{run+=inn(c)-outt(c);return tr(dt(c.d),cdesc(c),c.t==='in'?`<span class="in">${f(c.a)}</span>`:'',c.t!=='in'?`<span class="out">${f(c.a)}</span>`:'',f(run))});
+  if(S.from)rows.unshift(tr('','رصيد سابق','','',f(o)));
+  return tbl(['التاريخ','البيان','وارد','منصرف','الرصيد'],rows,tr('الإجمالي','',f(sum(cs,inn)),f(sum(cs,outt)),f(run)))},
+ totals(){const cs=cashR(),i=sum(cs,inn),g=sm(cs,'gen'),v=sm(cs,'inv'),p=sm(cs,'pay'),o=openBal();
+  return `<div class="cards">${S.from?card('رصيد أول الفترة',f(o)):''}${card('إجمالي الواصل',f(i))}${card('المصروفات',f(g))}${card('الفواتير',f(v))}${card('مدفوع للعمال',f(p))}${card('إجمالي المصروف',f(g+v+p))}${card('الرصيد المتبقي',f(o+i-g-v-p),'main')}</div>`},
+ dues(){const st=D.workers.map(w=>({w,s:wstat(w,rng)}));const t=k=>sum(st,x=>x.s[k]);
+  return tbl(['الاسم','النوع','الكمية','المستحق','الواصل معه','المتبقي له'],st.map(({w,s})=>tr(esc(w.name),w.kind==='e'?'معدة':'عامل',uq(w,s.days),f(s.due),f(s.paid),`<span class="${s.rem>0?'out':'in'}">${f(s.rem)}</span>`)),tr('الإجمالي','','',f(t('due')),f(t('paid')),f(t('rem'))))}
+};
+REPS.month='تقرير الفترة / الشهر';
+const per=()=>S.rep==='day'||(!S.from&&!S.to)?'':' من '+(S.from||'البداية')+' إلى '+(S.to||'اليوم');
+const title=()=>REPS[S.rep]+(S.rep==='day'?' '+dt(S.day):'')+per();
+function setMonth(v){S.m=v||'';if(!v){S.from=S.to=''}else{const[y,m]=v.split('-').map(Number);S.from=v+'-01';S.to=v+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0')}render()}
+function setRange(k,v){S[k]=v;S.m='';render()}
+function repView(){const fb=S.rep==='day'?'':`<section style="margin:0 0 10px"><div class="row" style="margin:0"><label>شهر<input type="month" value="${S.m}" onchange="setMonth(this.value)"></label><label>من تاريخ<input type="date" value="${S.from}" onchange="setRange('from',this.value)"></label><label>إلى تاريخ<input type="date" value="${S.to}" onchange="setRange('to',this.value)"></label></div>${S.from||S.to?'<button style="margin-top:8px" onclick="setMonth(\'\')">عرض كل الفترات</button>':''}</section>`;
+ return `<select onchange="setS('rep',this.value)" style="margin-bottom:10px">${Object.entries(REPS).map(([k,v])=>`<option value="${k}" ${k===S.rep?'selected':''}>${v}</option>`).join('')}</select>${fb}
+<div class="bar"><button onclick="exPdf()">PDF</button><button onclick="exXlsx()">Excel</button><button onclick="wa()">ملخص واتساب</button></div>
+<section id="repOut" style="margin-top:0"><h2>${REPS[S.rep]}</h2>${R[S.rep]()}</section>`}
+
+function blocks(){const o=[];document.querySelectorAll('#repOut h2,#repOut .cards,#repOut table').forEach(e=>{
+ if(e.tagName==='H2'){if(e.textContent!==REPS[S.rep])o.push({h:e.textContent})}
+ else if(e.classList.contains('cards'))o.push({kv:[...e.children].map(c=>[c.querySelector('small').textContent,c.querySelector('b').textContent])});
+ else o.push({t:[...e.rows].map(r=>[...r.cells].map(c=>c.textContent.trim()))})});return o}
+const fname=ext=>`report-${S.rep}-${today()}.${ext}`;
+async function save(name,data){try{if(DL){await DL.save({filename:name,data});say('تم الحفظ، شاركه من جهازك عبر واتساب');return}
+ const type=name.endsWith('.pdf')?'application/pdf':name.endsWith('.xlsx')?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/plain',file=new File([data],name,{type});
+ if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file]});return}catch(e){if(e&&e.name==='AbortError')return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);say('تم تنزيل الملف')}catch(e){say('تعذّر إنشاء الملف')}
+}
+async function exXlsx(){if(!window.XLSX)return say('مكتبة Excel لم تُحمَّل');
+ const aoa=[[title()],[]];blocks().forEach(b=>{if(b.h)aoa.push([b.h]);if(b.kv)b.kv.forEach(x=>aoa.push(x));if(b.t)b.t.forEach(r=>aoa.push(r.map(x=>/^-?\d+(\.\d+)?$/.test(x)?+x:x)));aoa.push([])});
+ const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:24},{wch:16},{wch:30},{wch:14},{wch:14},{wch:14},{wch:14}];
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'تقرير');wb.Workbook={Views:[{RTL:true}]};
+ save(fname('xlsx'),XLSX.write(wb,{bookType:'xlsx',type:'array'}))}
+async function exPdf(){if(!window.jspdf)return say('مكتبة PDF لم تُحمَّل');
+ try{await document.fonts.ready}catch(e){}
+ const W=1240,H=1754,M=70,FF='Cairo,Tahoma,Arial,sans-serif',pages=[];let x,y;
+ const np=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle='#111';x.direction='rtl';x.textBaseline='top';y=M;pages.push(c)};
+ const fit=(s,w)=>{if(x.measureText(s).width<=w)return s;while(s.length>1&&x.measureText(s+'…').width>w)s=s.slice(0,-1);return s+'…'};
+ np();x.font='bold 40px '+FF;x.textAlign='right';x.fillText(title(),W-M,y);y+=80;
+ for(const b of blocks()){
+  if(b.h){if(y>H-M-140)np();y+=14;x.font='bold 30px '+FF;x.textAlign='right';x.fillText(b.h,W-M,y);y+=50}
+  if(b.kv)for(const[k,v]of b.kv){if(y>H-M-50)np();x.font='26px '+FF;x.textAlign='right';x.fillText(k+': '+v,W-M,y);y+=40}
+  if(b.t){const n=Math.max(...b.t.map(r=>r.length)),cw=(W-2*M)/n;
+   b.t.forEach((r,ri)=>{if(y>H-M-50)np();x.font=(ri===0?'bold ':'')+'22px '+FF;
+    if(ri===0){x.fillStyle='#e8e8e8';x.fillRect(M,y-6,W-2*M,44);x.fillStyle='#111'}
+    x.textAlign='center';r.forEach((s,j)=>x.fillText(fit(s,r.length===1?W-2*M:cw-12),r.length===1?W/2:W-M-(j+.5)*cw,y+2));
+    x.strokeStyle='#bbb';x.beginPath();x.moveTo(M,y+40);x.lineTo(W-M,y+40);x.stroke();y+=44});y+=24}
+ }
+ const pdf=new jspdf.jsPDF('p','mm','a4');pages.forEach((c,i)=>{if(i)pdf.addPage();pdf.addImage(c.toDataURL('image/jpeg',.9),'JPEG',0,0,210,297)});
+ save(fname('pdf'),pdf.output('arraybuffer'))}
+function wa(){let t='*'+title()+'*\n';blocks().forEach(b=>{if(b.h)t+='\n'+b.h+'\n';if(b.kv)b.kv.forEach(([k,v])=>t+=k+': '+v+'\n');if(b.t)b.t.slice(0,41).forEach(r=>t+=r.join(' | ')+'\n')});
+ const w=window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');if(!w)say(DL?'تعذّر فتح واتساب. حمّل PDF وشاركه من جهازك':'تعذّر فتح واتساب')}
+
+function render(){
+ const keep={};document.querySelectorAll('#app input[id]:not([type=file]),#app select[id],#app textarea[id]').forEach(e=>keep[e.id]=e.value);
+ const fa=document.activeElement,fid=fa&&fa.id,ss=fa&&fa.selectionStart;
+ $('tDay').style.display=RO?'none':'';if(RO)S.tab='rep';$('tDay').className=S.tab==='day'?'on':'';$('tRep').className=S.tab==='rep'?'on':'';$('app').innerHTML=(RO?'<p class="note" style="margin:0 0 10px">عرض فقط: لا تملك صلاحية الإدخال.</p>':'')+(S.tab==='day'?dayView():repView());
+ for(const k in keep){const e=$(k);if(e)e.value=keep[k]}
+ const ct=$('cType');if(ct)$('cWk').style.display=ct.value==='pay'?'':'none';
+ if(ct)ct.onchange=()=>{$('cWk').style.display=ct.value==='pay'?'':'none'};
+ if(fid&&$(fid)){$(fid).focus();try{$(fid).setSelectionRange(ss,ss)}catch(e){}}
+}
+$('tDay').onclick=()=>{S.tab='day';render()};$('tRep').onclick=()=>{S.tab='rep';render()};
+
+(async()=>{
+ try{
+     if(window.claude){
+         DB=await claude.use('db');DL=await claude.use('downloads');
+         const u=await claude.use('user');
+         if(DB&&u&&u.can&&(await u.can('data.write'))===false)DB=null;
+     }
+ }catch(e){}
+
+ if(supabaseClient){
+     const { data: { session } } = await supabaseClient.auth.getSession();
+     if(session){ currentUser = session.user; }
+     supabaseClient.auth.onAuthStateChange((_event, session) => {
+         currentUser = session ? session.user : null;
+         renderAuth();
+     });
+     renderAuth();
+ } else {
+     renderAuth();
+ }
+})();
+</script>
+</body>
+</html>
